@@ -623,8 +623,8 @@ solution_map = build_map(
 )
 st_folium(solution_map, height=560, use_container_width=True, returned_objects=[])
 
-left, right = st.columns([1.0, 1.0], gap="large")
-with left:
+profit_column, coverage_column = st.columns(2, gap="large")
+with profit_column:
     st.subheader("Estimated net profit by store budget")
     profit_chart = (
         alt.Chart(scenario_table)
@@ -664,6 +664,7 @@ with left:
     )
     st.altair_chart(profit_chart, width="stretch")
 
+with coverage_column:
     st.subheader("Customer coverage by store budget")
     coverage_chart = (
         alt.Chart(scenario_table)
@@ -745,7 +746,7 @@ styled_scenario_table = display_scenario_table.style.apply(
                 ("background-color", "#263337"),
                 ("color", "#f4f6f2"),
                 ("font-weight", "700"),
-                ("font-size", "11px"),
+                ("font-size", "14px"),
                 ("font-family", "sans-serif"),
                 ("text-align", "center"),
                 ("border-color", "#d2d9d4"),
@@ -755,8 +756,8 @@ styled_scenario_table = display_scenario_table.style.apply(
         {
             "selector": "td",
             "props": [
-                ("padding", "0.4rem 0.3rem"),
-                ("font-size", "11px"),
+                ("padding", "0.55rem 0.45rem"),
+                ("font-size", "14px"),
                 ("font-family", "sans-serif"),
                 ("text-align", "center"),
                 ("vertical-align", "middle"),
@@ -776,18 +777,17 @@ styled_scenario_table = display_scenario_table.style.apply(
         },
     ]
 ).set_table_attributes('style="width: 100%; table-layout: fixed;"').hide(axis="index")
-with right:
-    st.subheader("Scenario comparison")
-    st.html(styled_scenario_table.to_html(), width="stretch")
-    st.download_button(
-        "Download scenario data (CSV)",
-        data=scenario_table.to_csv(index=False),
-        file_name="chennai_store_scenarios.csv",
-        mime="text/csv",
-    )
-    st.caption(
-        "Estimated net profit includes order contribution after distance-based delivery "
-        "costs, minus daily store operating costs and setup-cost recovery. The optimizer "
-        "uses a greedy marginal-profit heuristic; unprofitable or out-of-range assignments "
-        "remain unserved."
-    )
+st.subheader("Scenario comparison")
+st.html(styled_scenario_table.to_html(), width="stretch")
+st.download_button(
+    "Download scenario data (CSV)",
+    data=scenario_table.to_csv(index=False),
+    file_name="chennai_store_scenarios.csv",
+    mime="text/csv",
+)
+st.caption(
+    "Estimated net profit includes order contribution after distance-based delivery "
+    "costs, minus daily store operating costs and setup-cost recovery. The optimizer "
+    "uses a greedy marginal-profit heuristic; unprofitable or out-of-range assignments "
+    "remain unserved."
+)
