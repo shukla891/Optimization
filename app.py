@@ -862,26 +862,38 @@ else:
                     ("background-color", "#263337"),
                     ("color", "#f4f6f2"),
                     ("font-weight", "700"),
-                    ("font-size", "13px"),
+                    ("font-size", "14px"),
+                    ("font-family", "sans-serif"),
                     ("text-align", "center"),
-                    ("white-space", "normal"),
+                    ("border-color", "#d2d9d4"),
+                    ("border-bottom", "2px solid #a4ba39"),
                 ],
             },
             {
                 "selector": "td",
                 "props": [
-                    ("padding", "0.45rem 0.55rem"),
-                    ("font-size", "13px"),
+                    ("padding", "0.55rem 0.45rem"),
+                    ("font-size", "14px"),
+                    ("font-family", "sans-serif"),
                     ("text-align", "center"),
+                    ("vertical-align", "middle"),
+                    ("border-bottom", "1px solid #d2d9d4"),
                 ],
             },
             {
                 "selector": "table",
-                "props": [("width", "100%"), ("border-collapse", "collapse")],
+                "props": [
+                    ("width", "100%"),
+                    ("table-layout", "fixed"),
+                    ("border-collapse", "separate"),
+                    ("border-spacing", "0"),
+                    ("border", "1px solid #d2d9d4"),
+                    ("border-radius", "4px"),
+                ],
             },
         ]
-    ).hide(axis="index")
-    st.dataframe(styled_store_performance, width="stretch")
+    ).set_table_attributes('style="width: 100%; table-layout: fixed;"').hide(axis="index")
+    st.html(styled_store_performance.to_html(), width="stretch")
     st.download_button(
         "Download store-level results (CSV)",
         data=store_performance.to_csv(index=False),
