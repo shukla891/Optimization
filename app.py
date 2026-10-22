@@ -268,6 +268,43 @@ def evaluate_budget(
     }
 
 
+def summarize_store_performance(
+    candidates: pd.DataFrame,
+    customers: pd.DataFrame,
+    solution: dict,
+    operating_cost_per_day_rs: float,
+    setup_recovery_per_day_rs: float,
+) -> pd.DataFrame:
+    rows = []
+    assignments = solution["assignments"]
+    for store_index in solution["opened"]:
+        assigned = assignments == store_index
+        served_distances = solution["assigned_distance"][assigned]
+        contribution_after_delivery = float(solution["assignment_profit"][assigned].sum())
+        operating_cost = operating_cost_per_day_rs
+        setup_recovery = setup_recovery_per_day_rs
+        store = candidates.iloc[store_index]
+        rows.append(
+            {
+                "Store": store["store_id"],
+                "Latitude": float(store["latitude"]),
+                "Longitude": float(store["longitude"]),
+                "Customers served": int(assigned.sum()),
+                "Orders / day": float(customers.loc[assigned, "orders_per_day"].sum()),
+                "Avg. distance (km)": (
+                    float(served_distances.mean()) if len(served_distances) else np.nan
+                ),
+                "Contribution after delivery (Rs/day)": contribution_after_delivery,
+                "Operating cost (Rs/day)": operating_cost,
+                "Setup recovery (Rs/day)": setup_recovery,
+                "Estimated net profit (Rs/day)": (
+                    contribution_after_delivery - operating_cost - setup_recovery
+                ),
+            }
+        )
+    return pd.DataFrame(rows)
+
+
 @st.cache_data(show_spinner="Optimizing candidate locations...")
 def solve_scenarios(
     candidates: pd.DataFrame,
@@ -784,6 +821,77 @@ st.download_button(
     data=scenario_table.to_csv(index=False),
     file_name="chennai_store_scenarios.csv",
     mime="text/csv",
+)
+st.subheader("Store-level contribution and outcomes")
+store_performance = summarize_store_performance(
+    candidate_data,
+    customer_data,
+    chosen,
+    store_operating_cost_per_day,
+    daily_setup_cost_per_store,
+)
+if store_performance.empty:
+    st.info("No stores were opened in this scenario.")
+else:
+    styled_store_performance = store_performance.style.apply(
+        lambda row: [
+            "background-color: #f7f9f6; color: #253236; border-color: #d2d9d4"
+            if row.name % 2 == 0
+            else "background-color: #e8ede8; color: #253236; border-color: #d2d9d4"
+            for _ in row
+        ],
+        axis=1,
+    ).format(
+        {
+            "Latitude": "{:.4f}",
+            "Longitude": "{:.4f}",
+            "Customers served": "{:,.0f}",
+            "Orders / day": "{:,.1f}",
+            "Avg. distance (km)": "{:.2f}",
+            "Contribution after delivery (Rs/day)": "Rs {:,.0f}",
+            "Operating cost (Rs/day)": "Rs {:,.0f}",
+            "Setup recovery (Rs/day)": "Rs {:,.0f}",
+            "Estimated net profit (Rs/day)": "Rs {:,.0f}",
+        },
+        na_rep="N/A",
+    ).set_table_styles(
+        [
+            {
+                "selector": "th",
+                "props": [
+                    ("background-color", "#263337"),
+                    ("color", "#f4f6f2"),
+                    ("font-weight", "700"),
+                    ("font-size", "13px"),
+                    ("text-align", "center"),
+                    ("white-space", "normal"),
+                ],
+            },
+            {
+                "selector": "td",
+                "props": [
+                    ("padding", "0.45rem 0.55rem"),
+                    ("font-size", "13px"),
+                    ("text-align", "center"),
+                ],
+            },
+            {
+                "selector": "table",
+                "props": [("width", "100%"), ("border-collapse", "collapse")],
+            },
+        ]
+    ).hide(axis="index")
+    st.dataframe(styled_store_performance, width="stretch")
+    st.download_button(
+        "Download store-level results (CSV)",
+        data=store_performance.to_csv(index=False),
+        file_name="chennai_store_performance.csv",
+        mime="text/csv",
+    )
+st.caption(
+    "Contribution after delivery is the sum for customers assigned to each store, "
+    "before fixed store costs. Estimated net profit subtracts that store's daily "
+    "operating cost and setup-cost recovery."
 )
 st.caption(
     "Estimated net profit includes order contribution after distance-based delivery "
