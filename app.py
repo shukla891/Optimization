@@ -19,14 +19,16 @@ st.markdown(
     """
     <style>
     :root {
-        --canvas: #eef1ee;
+        --canvas: #c8d2cc;
         --ink: #1b292b;
         --muted: #667578;
-        --line: #d2d9d4;
+        --line: #c4cec8;
         --signal: #a4ba39;
     }
     [data-testid="stAppViewContainer"] {
-        background: linear-gradient(135deg, #f2f4f1 0%, #e9ede9 100%);
+        background:
+            radial-gradient(ellipse at 50% 0%, rgba(255, 255, 255, 0.32), transparent 58%),
+            linear-gradient(135deg, #d6ded9 0%, #c3cec7 52%, #b9c6bf 100%);
         color: var(--ink);
     }
     [data-testid="stHeader"] { background: transparent; }
@@ -37,16 +39,16 @@ st.markdown(
     h3 { font-size: 1rem !important; font-weight: 700 !important; }
     .title-banner {
         margin: 0 0 0.35rem;
-        padding: 0.65rem 1rem;
-        background: #fbfcfa;
-        border: 1px solid #c8d0cb;
-        border-radius: 4px;
+        padding: 0.8rem 1rem;
+        background: linear-gradient(110deg, #fbfcfa 0%, #f1f5f1 100%);
+        border: 1px solid #aebbb3;
+        border-top: 4px solid var(--signal);
+        border-radius: 6px;
         text-align: center;
         box-shadow:
             inset 0 1px 0 rgba(255, 255, 255, 0.95),
-            0 1px 0 rgba(26, 42, 38, 0.08),
-            0 3px 0 #dfe5e0,
-            0 8px 16px rgba(26, 42, 38, 0.11);
+            0 2px 0 rgba(26, 42, 38, 0.08),
+            0 10px 24px rgba(26, 42, 38, 0.16);
     }
     .title-banner h1 {
         margin: 0;
@@ -68,8 +70,8 @@ st.markdown(
         line-height: 1.35;
     }
     [data-testid="stSidebar"] {
-        background: #e3e8e3;
-        border-right: 1px solid #cbd3cd;
+        background: #c4cec8;
+        border-right: 1px solid #aebbb3;
     }
     [data-testid="stSidebar"] h2 { font-size: 1.05rem !important; }
     [data-testid="stMetric"] {
@@ -78,8 +80,8 @@ st.markdown(
         background: #fbfcfa;
         border: 1px solid var(--line);
         border-left: 3px solid var(--signal);
-        border-radius: 3px;
-        box-shadow: 0 2px 7px rgba(26, 42, 38, 0.05);
+        border-radius: 5px;
+        box-shadow: 0 3px 10px rgba(26, 42, 38, 0.1);
     }
     [data-testid="stMetricLabel"] p { color: var(--muted); font-size: 0.76rem; }
     [data-testid="stMetricValue"] {
@@ -110,11 +112,143 @@ st.markdown(
 )
 
 CITY_CENTER = (13.0475, 80.2090)
+EARTH_RADIUS_KM = 6371.0088
 SCENARIO_BUDGETS = (2, 5, 10, 20, 25)
 STORE_COLORS = [
     "#087f5b", "#e67700", "#1971c2", "#c2255c", "#6741d9",
     "#0b7285", "#a61e4d", "#5c940d", "#d9480f", "#364fc7",
 ]
+CHENNAI_LAND_POLYGON = np.array(
+    [
+        [13.182, 80.265],
+        [13.180, 80.205],
+        [13.150, 80.125],
+        [13.080, 80.095],
+        [13.000, 80.095],
+        [12.930, 80.155],
+        [12.910, 80.235],
+        [12.905, 80.300],
+        [12.955, 80.335],
+        [13.045, 80.338],
+        [13.125, 80.330],
+        [13.180, 80.318],
+    ]
+)
+
+
+def point_in_polygon(point: tuple[float, float], polygon: np.ndarray) -> bool:
+    x, y = point
+    inside = False
+    n_points = len(polygon)
+    for idx, (x1, y1) in enumerate(polygon):
+        x2, y2 = polygon[(idx + 1) % n_points]
+        if (y1 > y) != (y2 > y):
+            x_intersection = (x2 - x1) * (y - y1) / (y2 - y1) + x1
+            if x < x_intersection:
+                inside = not inside
+    return inside
+
+
+def _clip_polygon_to_convex_polygon(
+    subject: list[tuple[float, float]],
+    clipper: np.ndarray,
+) -> list[tuple[float, float]]:
+    signed_area = sum(
+        clipper[index, 0] * clipper[(index + 1) % len(clipper), 1]
+        - clipper[(index + 1) % len(clipper), 0] * clipper[index, 1]
+        for index in range(len(clipper))
+    )
+    if abs(signed_area) <= 1e-12:
+        raise ValueError("The land boundary must have a non-zero area.")
+    orientation = 1.0 if signed_area > 0.0 else -1.0
+    clipped = subject
+
+    for edge_index, edge_start in enumerate(clipper):
+        edge_end = clipper[(edge_index + 1) % len(clipper)]
+        edge = edge_end - edge_start
+
+        def signed_distance(point: tuple[float, float]) -> float:
+            relative = np.asarray(point) - edge_start
+            return orientation * float(edge[0] * relative[1] - edge[1] * relative[0])
+
+        if not clipped:
+            break
+
+        output: list[tuple[float, float]] = []
+        previous = clipped[-1]
+        previous_distance = signed_distance(previous)
+        for current in clipped:
+            current_distance = signed_distance(current)
+            previous_inside = previous_distance >= -1e-12
+            current_inside = current_distance >= -1e-12
+
+            if previous_inside != current_inside:
+                fraction = previous_distance / (previous_distance - current_distance)
+                intersection = (
+                    previous[0] + fraction * (current[0] - previous[0]),
+                    previous[1] + fraction * (current[1] - previous[1]),
+                )
+                output.append(intersection)
+            if current_inside:
+                output.append(current)
+
+            previous = current
+            previous_distance = current_distance
+        clipped = output
+
+    return clipped
+
+
+def clip_service_radius_to_land(
+    latitude: float,
+    longitude: float,
+    max_distance_km: float,
+) -> list[tuple[float, float]]:
+    if max_distance_km <= 0.0:
+        raise ValueError("Maximum service distance must be greater than zero.")
+
+    radius_m = max_distance_km * 1000.0
+    earth_radius_m = EARTH_RADIUS_KM * 1000.0
+    latitude_radians = np.radians(latitude)
+    angles = np.linspace(0.0, 2.0 * np.pi, 96, endpoint=False)
+    circle = [
+        (
+            latitude + np.degrees(radius_m * np.cos(angle) / earth_radius_m),
+            longitude
+            + np.degrees(
+                radius_m * np.sin(angle)
+                / (earth_radius_m * np.cos(latitude_radians))
+            ),
+        )
+        for angle in angles
+    ]
+    return _clip_polygon_to_convex_polygon(circle, CHENNAI_LAND_POLYGON)
+
+
+def generate_land_points(
+    rng: np.random.Generator,
+    point_count: int,
+    zone_weights: np.ndarray,
+    polygon: np.ndarray,
+    x_scale: float,
+    y_scale: float,
+) -> np.ndarray:
+    points = np.empty((point_count, 2), dtype=np.float64)
+    filled = 0
+    attempts = 0
+    while filled < point_count and attempts < 50_000:
+        attempts += 1
+        zone_index = int(rng.choice(len(zone_weights), p=zone_weights))
+        point = ZONES[zone_index] + rng.normal(loc=0.0, scale=(x_scale, y_scale))
+        if not point_in_polygon((point[0], point[1]), polygon):
+            continue
+        points[filled] = point
+        filled += 1
+    if filled != point_count:
+        raise RuntimeError("Unable to generate enough land-constrained points for the scenario.")
+    return points
+
+
 ZONES = np.array(
     [
         [13.165, 80.301],  # Tiruvottiyur
@@ -150,20 +284,22 @@ def get_scenario_budgets(max_stores: int) -> tuple[int, ...]:
 @st.cache_data(show_spinner=False)
 def generate_data(candidate_count: int, customer_count: int, seed: int):
     rng = np.random.default_rng(seed)
-
-    candidate_zones = rng.choice(len(ZONES), size=candidate_count, p=ZONE_WEIGHTS)
-    customer_zones = rng.choice(len(ZONES), size=customer_count, p=ZONE_WEIGHTS)
-
-    candidate_points = ZONES[candidate_zones] + rng.normal(
-        loc=0.0, scale=(0.010, 0.012), size=(candidate_count, 2)
+    candidate_points = generate_land_points(
+        rng=rng,
+        point_count=candidate_count,
+        zone_weights=ZONE_WEIGHTS,
+        polygon=CHENNAI_LAND_POLYGON,
+        x_scale=0.010,
+        y_scale=0.012,
     )
-    customer_points = ZONES[customer_zones] + rng.normal(
-        loc=0.0, scale=(0.014, 0.016), size=(customer_count, 2)
+    customer_points = generate_land_points(
+        rng=rng,
+        point_count=customer_count,
+        zone_weights=ZONE_WEIGHTS,
+        polygon=CHENNAI_LAND_POLYGON,
+        x_scale=0.014,
+        y_scale=0.016,
     )
-    candidate_points[:, 0] = np.clip(candidate_points[:, 0], 12.86, 13.22)
-    candidate_points[:, 1] = np.clip(candidate_points[:, 1], 80.08, 80.34)
-    customer_points[:, 0] = np.clip(customer_points[:, 0], 12.86, 13.22)
-    customer_points[:, 1] = np.clip(customer_points[:, 1], 80.08, 80.34)
 
     customers = pd.DataFrame(
         {
@@ -184,7 +320,6 @@ def generate_data(candidate_count: int, customer_count: int, seed: int):
 
 
 def haversine_matrix(customers: pd.DataFrame, candidates: pd.DataFrame) -> np.ndarray:
-    earth_radius_km = 6371.0088
     customer_lat = np.radians(customers["latitude"].to_numpy())[:, None]
     customer_lon = np.radians(customers["longitude"].to_numpy())[:, None]
     candidate_lat = np.radians(candidates["latitude"].to_numpy())[None, :]
@@ -196,7 +331,7 @@ def haversine_matrix(customers: pd.DataFrame, candidates: pd.DataFrame) -> np.nd
         np.sin(lat_delta / 2.0) ** 2
         + np.cos(customer_lat) * np.cos(candidate_lat) * np.sin(lon_delta / 2.0) ** 2
     )
-    return (2.0 * earth_radius_km * np.arcsin(np.sqrt(np.clip(haversine, 0.0, 1.0)))).astype(
+    return (2.0 * EARTH_RADIUS_KM * np.arcsin(np.sqrt(np.clip(haversine, 0.0, 1.0)))).astype(
         np.float32
     )
 
@@ -372,7 +507,7 @@ def build_map(
         assigned_indexes = np.sort(rng.choice(assigned_indexes, size=700, replace=False))
 
     assignment_layer = folium.FeatureGroup(
-        name=f"Sampled customer assignments ({len(assigned_indexes):,})", show=True
+        name=f"Sampled customer assignments ({len(assigned_indexes):,})", show=False
     )
     for customer_index in assigned_indexes:
         store_index = int(assignments[customer_index])
@@ -399,19 +534,29 @@ def build_map(
         ).add_to(assignment_layer)
     assignment_layer.add_to(map_view)
 
-    service_layer = folium.FeatureGroup(name="Maximum service distance", show=False)
+    service_layer = folium.FeatureGroup(name="Maximum land service area", show=False)
     open_indexes = set(solution["opened"])
     for store_index in open_indexes:
         store = candidates.iloc[store_index]
         color = STORE_COLORS[store_index % len(STORE_COLORS)]
-        folium.Circle(
-            location=(store["latitude"], store["longitude"]),
-            radius=max_distance_km * 1000,
+        service_area = clip_service_radius_to_land(
+            float(store["latitude"]),
+            float(store["longitude"]),
+            max_distance_km,
+        )
+        if len(service_area) < 3:
+            raise RuntimeError(
+                f"Could not construct a land-constrained service area for {store['store_id']}."
+            )
+        folium.Polygon(
+            locations=service_area,
             color=color,
             weight=1,
-            fill=False,
+            fill=True,
+            fill_color=color,
+            fill_opacity=0.08,
             opacity=0.42,
-            tooltip=f"{store['store_id']} maximum service radius: {max_distance_km:g} km",
+            tooltip=f"{store['store_id']} maximum service distance on land: {max_distance_km:g} km",
         ).add_to(service_layer)
     service_layer.add_to(map_view)
 
@@ -469,7 +614,7 @@ def build_map(
             </div>
             <div style="display: flex; align-items: center; gap: 6px; margin-top: 4px;">
                 <span style="width: 10px; height: 10px; border: 1px solid #687078; border-radius: 50%;"></span>
-                <span>Maximum service radius</span>
+                <span>Maximum service distance (land only)</span>
             </div>
         </div>
         """
@@ -653,7 +798,8 @@ elif scenario_choice == max_stores_allowed:
 st.subheader("Chennai assignment map")
 st.caption(
     "Heat intensity includes all customers. Connections show a reproducible sample of "
-    "up to 700 assignments; toggle layers in the map to inspect candidates and service radii."
+    "up to 700 assignments; toggle layers in the map to inspect candidates and land-only "
+    "maximum service areas."
 )
 solution_map = build_map(
     candidate_data, customer_data, chosen, max_distance_km, int(seed)
