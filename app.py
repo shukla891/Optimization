@@ -74,6 +74,11 @@ st.markdown(
         border-right: 1px solid #aebbb3;
     }
     [data-testid="stSidebar"] h2 { font-size: 1.05rem !important; }
+    .st-key-customer_distance [data-testid="stSlider"] [role="slider"] {
+        background-color: #1971c2 !important;
+        border-color: #1971c2 !important;
+        box-shadow: 0 0 0 2px rgba(25, 113, 194, 0.2);
+    }
     [data-testid="stMetric"] {
         min-height: 100px;
         padding: 13px 15px;
@@ -650,7 +655,14 @@ with st.sidebar:
         value=10000,
         step=100,
     )
-    max_distance_km = st.slider("Maximum customer distance (km)", 1.0, 15.0, 5.0, step=0.5)
+    max_distance_km = st.slider(
+        "Maximum customer distance (km)",
+        1.0,
+        15.0,
+        5.0,
+        step=0.5,
+        key="customer_distance",
+    )
     seed = st.number_input("Random seed", min_value=0, max_value=999999, value=42, step=1)
     st.divider()
     st.header("Model assumptions")
