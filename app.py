@@ -74,7 +74,8 @@ st.markdown(
         border-right: 1px solid #aebbb3;
     }
     [data-testid="stSidebar"] h2 { font-size: 1.05rem !important; }
-    .st-key-customer_distance [data-testid="stSlider"] [role="slider"] {
+    .st-key-customer_distance [data-testid="stSlider"]
+    [role="group"] > div[data-rac][data-orientation="horizontal"] > div[data-rac] {
         background-color: #1971c2 !important;
         border-color: #1971c2 !important;
         box-shadow: 0 0 0 2px rgba(25, 113, 194, 0.2);
